@@ -30,16 +30,8 @@ def dist_collect(x):
 
 
 class MoBY(nn.Module):
-    def __init__(self,
-                 cfg,
-                 encoder,
-                 encoder_k,
-                 contrast_momentum=0.99,
-                 contrast_temperature=0.2,
-                 contrast_num_negative=4096,
-                 proj_num_layers=2,
-                 pred_num_layers=2,
-                 **kwargs):
+    def __init__(self, cfg, encoder, encoder_k, contrast_momentum=0.99, contrast_temperature=0.2,
+                 contrast_num_negative=4096, proj_num_layers=2, pred_num_layers=2, **kwargs):
         super().__init__()
         
         self.cfg = cfg
@@ -84,6 +76,7 @@ class MoBY(nn.Module):
         self.queue2 = F.normalize(self.queue2, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+        pass
 
     @torch.no_grad()
     def _momentum_update_key_encoder(self):
@@ -98,6 +91,7 @@ class MoBY(nn.Module):
 
         for param_q, param_k in zip(self.projector.parameters(), self.projector_k.parameters()):
             param_k.data = param_k.data * _contrast_momentum + param_q.data * (1. - _contrast_momentum)
+        pass
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys1, keys2):
@@ -116,9 +110,9 @@ class MoBY(nn.Module):
         ptr = (ptr + batch_size) % self.contrast_num_negative  # move pointer
 
         self.queue_ptr[0] = ptr
+        pass
 
     def contrastive_loss(self, q, k, queue):
-
         # positive logits: Nx1
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
         # negative logits: NxK
@@ -165,9 +159,12 @@ class MoBY(nn.Module):
         self._dequeue_and_enqueue(proj_1_ng, proj_2_ng)
 
         return loss
-    
-    
+
+    pass
+
+
 class MoBYMLP(nn.Module):
+
     def __init__(self, in_dim=256, inner_dim=4096, out_dim=256, num_layers=2):
         super(MoBYMLP, self).__init__()
         
@@ -184,5 +181,6 @@ class MoBYMLP(nn.Module):
     def forward(self, x):
         x = self.linear_hidden(x)
         x = self.linear_out(x)
-
         return x
+
+    pass

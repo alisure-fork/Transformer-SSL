@@ -32,48 +32,30 @@ except ImportError:
     amp = None
 
 
-"""
-python -m torch.distributed.launch --nproc_per_node 4 --master_port 12345  moby_main.py --cfg configs/moby_swin_tiny.yaml --data-path /mnt/4T/Data/data/ImageNet/ImageNet100 --batch-size 32
-"""
-
-
 def parse_option():
     parser = argparse.ArgumentParser('MoBY training and evaluation script', add_help=False)
-    parser.add_argument('--cfg', type=str, required=True, metavar="FILE", help='path to config file', )
-    parser.add_argument(
-        "--opts",
-        help="Modify config options by adding 'KEY VALUE' pairs. ",
-        default=None,
-        nargs='+',
-    )
+    parser.add_argument('--cfg', type=str, default="configs/mss_swin_tiny.yaml", metavar="FILE", help='path to config file', )
+    parser.add_argument("--opts", help="Modify config options by adding 'KEY VALUE' pairs. ", default=None, nargs='+')
 
     # easy config modification
-    parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
-    parser.add_argument('--data-path', type=str, help='path to dataset')
+    parser.add_argument('--batch-size', type=int, default=96, help="batch size for single GPU")
+    parser.add_argument('--data-path', type=str, default="/mnt/4T/Data/data/ImageNet/ImageNet100", help='path to dataset')
     parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
     parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
-                        help='no: no cache, '
-                             'full: cache all data, '
-                             'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
+                        help='no: no cache, full: cache all data, part: sharding the dataset into nonoverlapping pieces and only cache one piece')
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
-    parser.add_argument('--use-checkpoint', action='store_true',
-                        help="whether to use gradient checkpointing to save memory")
-    parser.add_argument('--amp-opt-level', type=str, default='O1', choices=['O0', 'O1', 'O2'],
-                        help='mixed precision opt level, if O0, no amp is used')
-    parser.add_argument('--output', default='output', type=str, metavar='PATH',
-                        help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
+    parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save memory")
+    parser.add_argument('--amp-opt-level', type=str, default='O1', choices=['O0', 'O1', 'O2'], help='mixed precision opt level, if O0, no amp is used')
+    parser.add_argument('--output', default='output', type=str, metavar='PATH', help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
     parser.add_argument('--tag', help='tag of experiment')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--throughput', action='store_true', help='Test throughput only')
-
     # distributed training
     parser.add_argument("--local_rank", type=int, required=True, help='local rank for DistributedDataParallel')
 
     args, unparsed = parser.parse_known_args()
-
     config = get_config(args)
-
     return args, config
 
 
@@ -92,7 +74,8 @@ def main(config):
     optimizer = build_optimizer(config, model)
     if config.AMP_OPT_LEVEL != "O0":
         model, optimizer = amp.initialize(model, optimizer, opt_level=config.AMP_OPT_LEVEL)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK],
+                                                      broadcast_buffers=False, find_unused_parameters=True)
     model_without_ddp = model.module
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -143,12 +126,11 @@ def train_one_epoch(config, model, data_loader, optimizer, epoch, lr_scheduler):
 
     start = time.time()
     end = time.time()
-    for idx, (samples_1, samples_2, targets) in enumerate(data_loader):
-        samples_1 = samples_1.cuda(non_blocking=True)
-        samples_2 = samples_2.cuda(non_blocking=True)
+    for idx, (samples_1, samples, targets) in enumerate(data_loader):
+        samples = samples.cuda(non_blocking=True)
         targets = targets.cuda(non_blocking=True)
 
-        loss = model(samples_1, samples_2)
+        loss = model(samples)
 
         optimizer.zero_grad()
         if config.AMP_OPT_LEVEL != "O0":
@@ -187,6 +169,12 @@ def train_one_epoch(config, model, data_loader, optimizer, epoch, lr_scheduler):
                 f'mem {memory_used:.0f}MB')
     epoch_time = time.time() - start
     logger.info(f"EPOCH {epoch} training takes {datetime.timedelta(seconds=int(epoch_time))}")
+    pass
+
+
+"""
+PYTHONPATH=. CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node 4 --master_port 12345  mss_main.py
+"""
 
 
 if __name__ == '__main__':

@@ -85,6 +85,11 @@ _C.MODEL.MOBY.CONTRAST_NUM_NEGATIVE = 4096
 _C.MODEL.MOBY.PROJ_NUM_LAYERS = 2
 _C.MODEL.MOBY.PRED_NUM_LAYERS = 2
 
+# MSS parameters
+_C.MODEL.MSS = CN()
+_C.MODEL.MSS.IS_MASK = False
+_C.MODEL.MSS.MASK_RATIO = 0.5
+
 # -----------------------------------------------------------------------------
 # Training settings
 # -----------------------------------------------------------------------------
